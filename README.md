@@ -1,0 +1,258 @@
+# Datadog MCP Server
+
+A Model Context Protocol (MCP) server that provides access to Datadog's API, starting with logs querying functionality.
+
+## Features
+
+- Query Datadog logs using natural language
+- Support for time ranges and filters
+- Built on official Datadog Go API client
+- Simple MCP protocol integration
+
+## Prerequisites
+
+- Go 1.21 or higher
+- Datadog API key and Application key
+- Access to a Datadog account with logs
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/kmesiab/go-dd-mcp.git
+cd go-dd-mcp
+
+# Build the server
+go build -o datadog-mcp-server
+```
+
+## Configuration
+
+Set your Datadog credentials as environment variables:
+
+```bash
+export DD_API_KEY="your-api-key"
+export DD_APP_KEY="your-application-key"
+```
+
+You can obtain these keys from your Datadog account:
+- API Key: Organization Settings > API Keys
+- Application Key: Organization Settings > Application Keys
+
+## Usage
+
+### Running the Server
+
+```bash
+./datadog-mcp-server
+```
+
+The server communicates via JSON-RPC 2.0 over stdin/stdout.
+
+### MCP Configuration
+
+Add this to your MCP client configuration (e.g., Claude Desktop config):
+
+```json
+{
+  "mcpServers": {
+    "datadog": {
+      "command": "/path/to/datadog-mcp-server",
+      "env": {
+        "DD_API_KEY": "your-api-key",
+        "DD_APP_KEY": "your-application-key"
+      }
+    }
+  }
+}
+```
+
+For Claude Desktop on macOS, the config file is located at:
+`~/Library/Application Support/Claude/claude_desktop_config.json`
+
+### VSCode Configuration
+
+#### Using with Cline Extension
+
+If you're using the [Cline extension](https://github.com/cline/cline) for VSCode:
+
+1. Install the Cline extension from the VSCode marketplace
+2. Open VSCode settings (Cmd/Ctrl + ,)
+3. Search for "Cline: MCP Settings"
+4. Click "Edit in settings.json"
+5. Add the MCP server configuration:
+
+```json
+{
+  "cline.mcpServers": {
+    "datadog": {
+      "command": "/absolute/path/to/datadog-mcp-server",
+      "env": {
+        "DD_API_KEY": "your-api-key",
+        "DD_APP_KEY": "your-application-key"
+      }
+    }
+  }
+}
+```
+
+#### Using with Continue Extension
+
+If you're using the [Continue extension](https://continue.dev/):
+
+1. Install the Continue extension
+2. Open the Continue configuration file (`~/.continue/config.json`)
+3. Add the MCP server under `mcpServers`:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "datadog",
+      "command": "/absolute/path/to/datadog-mcp-server",
+      "env": {
+        "DD_API_KEY": "your-api-key",
+        "DD_APP_KEY": "your-application-key"
+      }
+    }
+  ]
+}
+```
+
+#### Alternative: Use .env file
+
+Instead of hardcoding credentials in the config, you can create a `.env` file in the project directory:
+
+```bash
+# .env
+DD_API_KEY=your-api-key
+DD_APP_KEY=your-application-key
+```
+
+Then source it before launching VSCode:
+
+```bash
+# Load environment variables
+export $(cat .env | xargs)
+
+# Launch VSCode
+code .
+```
+
+**Important:** Make sure `/absolute/path/to/datadog-mcp-server` points to the actual binary location, for example:
+- `/Users/yourusername/go/github.com/kmesiab/go-dd-mcp/datadog-mcp-server` (macOS/Linux)
+- `C:\path\to\datadog-mcp-server.exe` (Windows)
+
+## Available Tools
+
+### query_logs
+
+Search and query Datadog logs with filters and time ranges.
+
+**Parameters:**
+
+- `query` (required): Search query using Datadog query syntax
+  - Examples: `service:web status:error`, `env:production @user.id:12345`
+- `from` (optional): Start time in RFC3339 format or relative time (e.g., `1h`, `30m`)
+  - Default: 1 hour ago
+- `to` (optional): End time in RFC3339 format or relative time
+  - Default: now
+- `limit` (optional): Maximum number of logs to return (max 1000)
+  - Default: 50
+
+**Example queries:**
+
+```
+Query all error logs in the last hour:
+  query: "status:error"
+
+Query logs from specific service in last 30 minutes:
+  query: "service:api-gateway"
+  from: "30m"
+
+Query logs with custom time range:
+  query: "env:production @http.status_code:500"
+  from: "2026-01-20T10:00:00Z"
+  to: "2026-01-20T12:00:00Z"
+  limit: 100
+```
+
+## Datadog Query Syntax
+
+The `query` parameter supports full Datadog log search syntax:
+
+- **Status**: `status:error`, `status:warn`, `status:info`
+- **Service**: `service:web-api`, `service:database`
+- **Environment**: `env:production`, `env:staging`
+- **Tags**: `version:1.2.3`, `region:us-east-1`
+- **Attributes**: `@user.id:123`, `@http.status_code:404`
+- **Text search**: `"error message"` (quoted for exact match)
+- **Wildcards**: `service:web-*`, `@user.email:*@example.com`
+- **Boolean operators**: `service:api AND status:error`, `status:error OR status:warn`
+- **Exclusion**: `-status:info`, `NOT service:test`
+
+## Development
+
+### Project Structure
+
+```
+.
+├── main.go           # MCP server implementation
+├── go.mod            # Go module dependencies
+├── go.sum            # Dependency checksums
+└── README.md         # This file
+```
+
+### Testing the Server
+
+You can test the server manually using stdin/stdout:
+
+```bash
+# Initialize
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./datadog-mcp-server
+
+# List available tools
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | ./datadog-mcp-server
+
+# Query logs
+echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_logs","arguments":{"query":"status:error","limit":10}}}' | ./datadog-mcp-server
+```
+
+## Architecture
+
+This server:
+1. Uses the official [Datadog Go API client](https://github.com/DataDog/datadog-api-client-go)
+2. Implements the MCP protocol for tool-based interactions
+3. Provides a simple bridge between LLMs and Datadog's Logs API
+
+The implementation is straightforward:
+- `main.go`: ~250 lines of code
+- MCP protocol handling
+- Single tool implementation (logs query)
+- Authentication via environment variables
+
+## Future Extensions
+
+Potential additions (PRs welcome):
+- Metrics querying
+- Event search
+- Monitor management
+- Dashboard access
+- Incident tracking
+- APM traces
+- Additional log analysis tools
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome. Please ensure code is well-tested and documented.
+
+## Resources
+
+- [Datadog API Documentation](https://docs.datadoghq.com/api/latest/)
+- [Datadog Go Client](https://github.com/DataDog/datadog-api-client-go)
+- [MCP Protocol Specification](https://modelcontextprotocol.io/)
+- [Datadog Log Search Syntax](https://docs.datadoghq.com/logs/explorer/search_syntax/)
