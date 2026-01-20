@@ -382,3 +382,22 @@ Contributions are welcome. Please ensure code is well-tested and documented.
 - [Datadog Go Client](https://github.com/DataDog/datadog-api-client-go)
 - [MCP Protocol Specification](https://modelcontextprotocol.io/)
 - [Datadog Log Search Syntax](https://docs.datadoghq.com/logs/explorer/search_syntax/)
+
+## Build Stats
+
+This project was built using Claude Code in a single session.
+
+**Code written:**
+- 670 lines of Go code (main.go + main_test.go)
+- 107 lines of CI/CD configuration
+- 60 lines of Makefile
+- 385 lines of documentation
+
+**Development metrics:**
+- API tokens used: ~100,000
+- Estimated API cost: ~$1.50 USD
+- Session duration: ~1.5 hours
+- Commits: 8
+
+**Notes:**
+This is a straightforward project - a thin wrapper around the official Datadog Go client with MCP protocol implementation. The bulk of the work was setting up proper types, tests, and CI/CD infrastructure rather than complex business logic.
