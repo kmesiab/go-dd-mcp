@@ -1,5 +1,11 @@
 # Datadog MCP Server
 
+[![CI](https://github.com/kmesiab/go-dd-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/kmesiab/go-dd-mcp/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kmesiab/go-dd-mcp)](https://goreportcard.com/report/github.com/kmesiab/go-dd-mcp)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/kmesiab/go-dd-mcp)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/kmesiab/go-dd-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/kmesiab/go-dd-mcp)
+
 A Model Context Protocol (MCP) server that provides access to Datadog's API, starting with logs querying functionality.
 
 ## Features
@@ -264,13 +270,67 @@ If you're getting connection errors:
 
 ```
 .
-├── main.go           # MCP server implementation
-├── go.mod            # Go module dependencies
-├── go.sum            # Dependency checksums
-└── README.md         # This file
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # GitHub Actions CI workflow
+├── .golangci.yml           # golangci-lint configuration
+├── main.go                 # MCP server implementation
+├── main_test.go            # Unit tests
+├── go.mod                  # Go module dependencies
+├── go.sum                  # Dependency checksums
+├── Makefile                # Build and development tasks
+└── README.md               # This file
 ```
 
-### Testing the Server
+### Building and Testing
+
+The project includes a Makefile for common development tasks:
+
+```bash
+# Build the binary
+make build
+
+# Run tests
+make test
+
+# Run tests with coverage report
+make coverage
+
+# Run linter
+make lint
+
+# Format code
+make fmt
+
+# Run all checks (fmt, vet, lint, test)
+make check
+
+# Install development tools (golangci-lint)
+make install-tools
+
+# Clean build artifacts
+make clean
+
+# See all available targets
+make help
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+go test -v ./...
+
+# Run tests with coverage
+go test -v -race -coverprofile=coverage.out ./...
+
+# View coverage in browser
+go tool cover -html=coverage.out
+```
+
+### Manual Testing
+
+You can test the server manually using stdin/stdout:
 
 You can test the server manually using stdin/stdout:
 
