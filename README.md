@@ -28,16 +28,37 @@ go build -o datadog-mcp-server
 
 ## Configuration
 
+### Environment Variables
+
 Set your Datadog credentials as environment variables:
 
 ```bash
 export DD_API_KEY="your-api-key"
 export DD_APP_KEY="your-application-key"
+export DD_SITE="datadoghq.com"  # Optional: defaults to datadoghq.com if not set
 ```
 
+**Obtaining Credentials:**
 You can obtain these keys from your Datadog account:
 - API Key: Organization Settings > API Keys
 - Application Key: Organization Settings > Application Keys
+
+**Regional Sites:**
+If your organization uses a different Datadog region, set `DD_SITE` to the appropriate value:
+
+| Region | DD_SITE Value | Example URL |
+|--------|---------------|-------------|
+| US1 (default) | `datadoghq.com` | `https://app.datadoghq.com` |
+| US3 | `us3.datadoghq.com` | `https://us3.datadoghq.com` |
+| US5 | `us5.datadoghq.com` | `https://us5.datadoghq.com` |
+| EU | `datadoghq.eu` | `https://app.datadoghq.eu` |
+| AP1 | `ap1.datadoghq.com` | `https://ap1.datadoghq.com` |
+| Government | `ddog-gov.com` | `https://app.ddog-gov.com` |
+
+To identify your site, check the URL you use to access Datadog in your browser.
+
+**Note for SSO Users:**
+If your company uses SSO, you still use the same API and Application keys. SSO only affects UI login, not API authentication.
 
 ## Usage
 
@@ -60,7 +81,24 @@ Add this to your MCP client configuration (e.g., Claude Desktop config):
       "command": "/path/to/datadog-mcp-server",
       "env": {
         "DD_API_KEY": "your-api-key",
-        "DD_APP_KEY": "your-application-key"
+        "DD_APP_KEY": "your-application-key",
+        "DD_SITE": "datadoghq.com"
+      }
+    }
+  }
+}
+```
+
+For EU region example:
+```json
+{
+  "mcpServers": {
+    "datadog": {
+      "command": "/path/to/datadog-mcp-server",
+      "env": {
+        "DD_API_KEY": "your-api-key",
+        "DD_APP_KEY": "your-application-key",
+        "DD_SITE": "datadoghq.eu"
       }
     }
   }
@@ -89,7 +127,8 @@ If you're using the [Cline extension](https://github.com/cline/cline) for VSCode
       "command": "/absolute/path/to/datadog-mcp-server",
       "env": {
         "DD_API_KEY": "your-api-key",
-        "DD_APP_KEY": "your-application-key"
+        "DD_APP_KEY": "your-application-key",
+        "DD_SITE": "datadoghq.com"
       }
     }
   }
@@ -112,7 +151,8 @@ If you're using the [Continue extension](https://continue.dev/):
       "command": "/absolute/path/to/datadog-mcp-server",
       "env": {
         "DD_API_KEY": "your-api-key",
-        "DD_APP_KEY": "your-application-key"
+        "DD_APP_KEY": "your-application-key",
+        "DD_SITE": "datadoghq.com"
       }
     }
   ]
@@ -127,6 +167,7 @@ Instead of hardcoding credentials in the config, you can create a `.env` file in
 # .env
 DD_API_KEY=your-api-key
 DD_APP_KEY=your-application-key
+DD_SITE=datadoghq.com
 ```
 
 Then source it before launching VSCode:
@@ -190,6 +231,32 @@ The `query` parameter supports full Datadog log search syntax:
 - **Wildcards**: `service:web-*`, `@user.email:*@example.com`
 - **Boolean operators**: `service:api AND status:error`, `status:error OR status:warn`
 - **Exclusion**: `-status:info`, `NOT service:test`
+
+## Troubleshooting
+
+### Custom Enterprise Subdomains
+
+If your company uses a custom Datadog subdomain (e.g., `yourcompany.datadoghq.com`), you may encounter validation errors. The Go API client has a [known limitation](https://github.com/DataDog/datadog-api-client-go/issues/2456) with custom enterprise domains.
+
+**Workaround:**
+If you need to use a custom subdomain, the code would need to be modified to use context variables instead of the `DD_SITE` parameter. Contact your Datadog administrator to determine if your organization uses a standard regional site (like `datadoghq.eu` or `us3.datadoghq.com`) instead of a custom subdomain.
+
+Most enterprise SSO setups use standard regional sites, so this limitation typically doesn't affect API access.
+
+### Connection Issues
+
+If you're getting connection errors:
+
+1. **Verify your site/region**: Check the URL you use to access Datadog:
+   - `app.datadoghq.com` → `DD_SITE=datadoghq.com`
+   - `app.datadoghq.eu` → `DD_SITE=datadoghq.eu`
+   - `us3.datadoghq.com` → `DD_SITE=us3.datadoghq.com`
+
+2. **Verify API keys**: Ensure your API and App keys are valid and have the necessary permissions:
+   - Go to Organization Settings > API Keys
+   - Go to Organization Settings > Application Keys
+
+3. **Test manually**: Try the test commands in the "Testing the Server" section below.
 
 ## Development
 

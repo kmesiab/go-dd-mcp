@@ -46,6 +46,7 @@ type Tool struct {
 func NewMCPServer() (*MCPServer, error) {
 	apiKey := os.Getenv("DD_API_KEY")
 	appKey := os.Getenv("DD_APP_KEY")
+	site := os.Getenv("DD_SITE") // Optional: datadoghq.com (default), datadoghq.eu, us3.datadoghq.com, etc.
 
 	if apiKey == "" || appKey == "" {
 		return nil, fmt.Errorf("DD_API_KEY and DD_APP_KEY environment variables must be set")
@@ -59,6 +60,14 @@ func NewMCPServer() (*MCPServer, error) {
 			"appKeyAuth": {Key: appKey},
 		},
 	)
+
+	// Configure site/region if specified
+	if site != "" {
+		ctx = context.WithValue(ctx, datadog.ContextServerVariables, map[string]string{
+			"site": site,
+		})
+		log.Printf("Using Datadog site: %s", site)
+	}
 
 	configuration := datadog.NewConfiguration()
 	apiClient := datadog.NewAPIClient(configuration)
