@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server that provides access to Datadog's API, sta
 
 ## Prerequisites
 
-- Go 1.21 or higher
+- Go 1.25 or higher
 - Datadog API key and Application key
 - Access to a Datadog account with logs
 

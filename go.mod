@@ -1,6 +1,6 @@
 module github.com/kmesiab/go-dd-mcp
 
-go 1.22
+go 1.25
 
 require github.com/DataDog/datadog-api-client-go/v2 v2.54.0
 
