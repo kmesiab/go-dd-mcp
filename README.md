@@ -273,7 +273,6 @@ If you're getting connection errors:
 ├── .github/
 │   └── workflows/
 │       └── ci.yml          # GitHub Actions CI workflow
-├── .golangci.yml           # golangci-lint configuration
 ├── main.go                 # MCP server implementation
 ├── main_test.go            # Unit tests
 ├── go.mod                  # Go module dependencies

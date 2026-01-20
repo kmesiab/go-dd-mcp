@@ -19,28 +19,99 @@ type MCPServer struct {
 }
 
 type MCPRequest struct {
-	Jsonrpc string                 `json:"jsonrpc"`
-	ID      interface{}            `json:"id"`
-	Method  string                 `json:"method"`
-	Params  map[string]interface{} `json:"params,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
+	ID      int             `json:"id"`
+	Jsonrpc string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
 }
 
 type MCPResponse struct {
-	Jsonrpc string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *MCPError   `json:"error,omitempty"`
+	ID      int             `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *MCPError       `json:"error,omitempty"`
+	Jsonrpc string          `json:"jsonrpc"`
 }
 
 type MCPError struct {
-	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Code    int    `json:"code"`
+}
+
+type SchemaProperty struct {
+	Type        string   `json:"type"`
+	Description string   `json:"description,omitempty"`
+	Items       *SchemaProperty `json:"items,omitempty"`
+}
+
+type InputSchema struct {
+	Type       string                    `json:"type"`
+	Properties map[string]SchemaProperty `json:"properties"`
+	Required   []string                  `json:"required,omitempty"`
 }
 
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	InputSchema InputSchema `json:"inputSchema"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+}
+
+type ToolCallParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type QueryLogsParams struct {
+	Query string `json:"query"`
+	From  string `json:"from,omitempty"`
+	To    string `json:"to,omitempty"`
+	Limit int32  `json:"limit,omitempty"`
+}
+
+type LogEntry struct {
+	ID        string     `json:"id"`
+	Timestamp *time.Time `json:"timestamp"`
+	Message   string     `json:"message"`
+	Status    string     `json:"status"`
+	Service   string     `json:"service"`
+	Tags      []string   `json:"tags"`
+}
+
+type QueryLogsResult struct {
+	Logs  []LogEntry `json:"logs"`
+	Count int        `json:"count"`
+	Query string     `json:"query"`
+	From  string     `json:"from"`
+	To    string     `json:"to"`
+}
+
+type InitializeResult struct {
+	ProtocolVersion string           `json:"protocolVersion"`
+	ServerInfo      ServerInfo       `json:"serverInfo"`
+	Capabilities    ServerCapabilities `json:"capabilities"`
+}
+
+type ServerInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type ServerCapabilities struct {
+	Tools ToolsCapability `json:"tools"`
+}
+
+type ToolsCapability struct{}
+
+type ToolsListResult struct {
+	Tools []Tool `json:"tools"`
+}
+
+type TextContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type ToolCallResult struct {
+	Content []TextContent `json:"content"`
 }
 
 func NewMCPServer() (*MCPServer, error) {
@@ -83,27 +154,27 @@ func (s *MCPServer) ListTools() []Tool {
 		{
 			Name:        "query_logs",
 			Description: "Search and query Datadog logs with filters and time ranges",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"query": map[string]interface{}{
-						"type":        "string",
-						"description": "Search query using Datadog query syntax (e.g., 'service:web status:error')",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]SchemaProperty{
+					"query": {
+						Type:        "string",
+						Description: "Search query using Datadog query syntax (e.g., 'service:web status:error')",
 					},
-					"from": map[string]interface{}{
-						"type":        "string",
-						"description": "Start time in RFC3339 format or relative time (e.g., '1h', '30m'). Defaults to 1 hour ago.",
+					"from": {
+						Type:        "string",
+						Description: "Start time in RFC3339 format or relative time (e.g., '1h', '30m'). Defaults to 1 hour ago.",
 					},
-					"to": map[string]interface{}{
-						"type":        "string",
-						"description": "End time in RFC3339 format or relative time. Defaults to now.",
+					"to": {
+						Type:        "string",
+						Description: "End time in RFC3339 format or relative time. Defaults to now.",
 					},
-					"limit": map[string]interface{}{
-						"type":        "integer",
-						"description": "Maximum number of logs to return (max 1000). Defaults to 50.",
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of logs to return (max 1000). Defaults to 50.",
 					},
 				},
-				"required": []string{"query"},
+				Required: []string{"query"},
 			},
 		},
 	}
@@ -127,9 +198,8 @@ func parseTimeParam(timeStr string, defaultTime time.Time) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid time format: %s (use RFC3339 or duration like '1h')", timeStr)
 }
 
-func (s *MCPServer) QueryLogs(params map[string]interface{}) (interface{}, error) {
-	query, ok := params["query"].(string)
-	if !ok || query == "" {
+func (s *MCPServer) QueryLogs(params QueryLogsParams) (*QueryLogsResult, error) {
+	if params.Query == "" {
 		return nil, fmt.Errorf("query parameter is required")
 	}
 
@@ -137,22 +207,19 @@ func (s *MCPServer) QueryLogs(params map[string]interface{}) (interface{}, error
 	defaultFrom := time.Now().Add(-1 * time.Hour)
 	defaultTo := time.Now()
 
-	fromStr, _ := params["from"].(string)
-	toStr, _ := params["to"].(string)
-
-	from, err := parseTimeParam(fromStr, defaultFrom)
+	from, err := parseTimeParam(params.From, defaultFrom)
 	if err != nil {
 		return nil, err
 	}
 
-	to, err := parseTimeParam(toStr, defaultTo)
+	to, err := parseTimeParam(params.To, defaultTo)
 	if err != nil {
 		return nil, err
 	}
 
 	limit := int32(50)
-	if l, ok := params["limit"].(float64); ok {
-		limit = int32(l)
+	if params.Limit > 0 {
+		limit = params.Limit
 		if limit > 1000 {
 			limit = 1000
 		}
@@ -163,7 +230,7 @@ func (s *MCPServer) QueryLogs(params map[string]interface{}) (interface{}, error
 		Filter: &datadogV2.LogsQueryFilter{
 			From:  datadog.PtrString(from.Format(time.RFC3339)),
 			To:    datadog.PtrString(to.Format(time.RFC3339)),
-			Query: datadog.PtrString(query),
+			Query: datadog.PtrString(params.Query),
 		},
 		Page: &datadogV2.LogsListRequestPage{
 			Limit: datadog.PtrInt32(limit),
@@ -178,33 +245,27 @@ func (s *MCPServer) QueryLogs(params map[string]interface{}) (interface{}, error
 	}
 
 	// Format the response
-	logs := make([]map[string]interface{}, 0)
+	logs := make([]LogEntry, 0)
 	if resp.Data != nil {
 		for _, log := range resp.Data {
-			logMap := map[string]interface{}{
-				"id":        log.GetId(),
-				"timestamp": log.Attributes.Timestamp,
-				"message":   log.Attributes.GetMessage(),
-				"status":    log.Attributes.GetStatus(),
-				"service":   log.Attributes.GetService(),
-				"tags":      log.Attributes.GetTags(),
+			entry := LogEntry{
+				ID:        log.GetId(),
+				Timestamp: log.Attributes.Timestamp,
+				Message:   log.Attributes.GetMessage(),
+				Status:    log.Attributes.GetStatus(),
+				Service:   log.Attributes.GetService(),
+				Tags:      log.Attributes.GetTags(),
 			}
-
-			// Include custom attributes if present
-			if attrs := log.Attributes.GetAttributes(); attrs != nil {
-				logMap["attributes"] = attrs
-			}
-
-			logs = append(logs, logMap)
+			logs = append(logs, entry)
 		}
 	}
 
-	return map[string]interface{}{
-		"logs":  logs,
-		"count": len(logs),
-		"query": query,
-		"from":  from.Format(time.RFC3339),
-		"to":    to.Format(time.RFC3339),
+	return &QueryLogsResult{
+		Logs:  logs,
+		Count: len(logs),
+		Query: params.Query,
+		From:  from.Format(time.RFC3339),
+		To:    to.Format(time.RFC3339),
 	}, nil
 }
 
@@ -216,51 +277,77 @@ func (s *MCPServer) HandleRequest(req MCPRequest) MCPResponse {
 
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]interface{}{
-			"protocolVersion": "2024-11-05",
-			"serverInfo": map[string]string{
-				"name":    "datadog-mcp-server",
-				"version": "0.1.0",
+		result := InitializeResult{
+			ProtocolVersion: "2024-11-05",
+			ServerInfo: ServerInfo{
+				Name:    "datadog-mcp-server",
+				Version: "0.1.0",
 			},
-			"capabilities": map[string]interface{}{
-				"tools": map[string]bool{},
+			Capabilities: ServerCapabilities{
+				Tools: ToolsCapability{},
 			},
 		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			resp.Error = &MCPError{Code: -32603, Message: fmt.Sprintf("failed to marshal result: %v", err)}
+			return resp
+		}
+		resp.Result = resultJSON
 
 	case "tools/list":
-		resp.Result = map[string]interface{}{
-			"tools": s.ListTools(),
+		result := ToolsListResult{
+			Tools: s.ListTools(),
 		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			resp.Error = &MCPError{Code: -32603, Message: fmt.Sprintf("failed to marshal result: %v", err)}
+			return resp
+		}
+		resp.Result = resultJSON
 
 	case "tools/call":
-		toolName, ok := req.Params["name"].(string)
-		if !ok {
+		var params ToolCallParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			resp.Error = &MCPError{Code: -32602, Message: fmt.Sprintf("invalid params: %v", err)}
+			return resp
+		}
+
+		if params.Name == "" {
 			resp.Error = &MCPError{Code: -32602, Message: "tool name is required"}
 			return resp
 		}
 
-		args, ok := req.Params["arguments"].(map[string]interface{})
-		if !ok {
-			args = make(map[string]interface{})
-		}
-
-		switch toolName {
+		switch params.Name {
 		case "query_logs":
-			result, err := s.QueryLogs(args)
+			var queryParams QueryLogsParams
+			if err := json.Unmarshal(params.Arguments, &queryParams); err != nil {
+				resp.Error = &MCPError{Code: -32602, Message: fmt.Sprintf("invalid arguments: %v", err)}
+				return resp
+			}
+
+			result, err := s.QueryLogs(queryParams)
 			if err != nil {
 				resp.Error = &MCPError{Code: -32000, Message: err.Error()}
-			} else {
-				resp.Result = map[string]interface{}{
-					"content": []map[string]interface{}{
-						{
-							"type": "text",
-							"text": formatLogsResult(result),
-						},
-					},
-				}
+				return resp
 			}
+
+			toolResult := ToolCallResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: formatLogsResult(result),
+					},
+				},
+			}
+			resultJSON, err := json.Marshal(toolResult)
+			if err != nil {
+				resp.Error = &MCPError{Code: -32603, Message: fmt.Sprintf("failed to marshal result: %v", err)}
+				return resp
+			}
+			resp.Result = resultJSON
+
 		default:
-			resp.Error = &MCPError{Code: -32601, Message: fmt.Sprintf("unknown tool: %s", toolName)}
+			resp.Error = &MCPError{Code: -32601, Message: fmt.Sprintf("unknown tool: %s", params.Name)}
 		}
 
 	default:
@@ -270,8 +357,11 @@ func (s *MCPServer) HandleRequest(req MCPRequest) MCPResponse {
 	return resp
 }
 
-func formatLogsResult(result interface{}) string {
-	data, _ := json.MarshalIndent(result, "", "  ")
+func formatLogsResult(result *QueryLogsResult) string {
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Sprintf(`{"error": "failed to format result: %v"}`, err)
+	}
 	return string(data)
 }
 

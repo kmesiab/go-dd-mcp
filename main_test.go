@@ -95,13 +95,14 @@ func TestMCPServerListTools(t *testing.T) {
 
 	if queryLogsTool == nil {
 		t.Fatal("query_logs tool not found")
+		return
 	}
 
 	if queryLogsTool.Description == "" {
 		t.Error("query_logs tool should have a description")
 	}
 
-	if queryLogsTool.InputSchema == nil {
+	if queryLogsTool.InputSchema.Type == "" {
 		t.Error("query_logs tool should have an input schema")
 	}
 }
@@ -125,22 +126,18 @@ func TestHandleInitializeRequest(t *testing.T) {
 		t.Fatal("expected result, got nil")
 	}
 
-	// Check that result is a map with expected fields
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatal("expected result to be a map")
+	// Unmarshal and check the result
+	var result InitializeResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
 	}
 
-	if result["protocolVersion"] == nil {
+	if result.ProtocolVersion == "" {
 		t.Error("expected protocolVersion in result")
 	}
 
-	if result["serverInfo"] == nil {
-		t.Error("expected serverInfo in result")
-	}
-
-	if result["capabilities"] == nil {
-		t.Error("expected capabilities in result")
+	if result.ServerInfo.Name == "" {
+		t.Error("expected serverInfo.name in result")
 	}
 }
 
@@ -163,23 +160,13 @@ func TestHandleToolsListRequest(t *testing.T) {
 		t.Fatal("expected result, got nil")
 	}
 
-	// Check that result contains tools
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatal("expected result to be a map")
+	// Unmarshal and check the result
+	var result ToolsListResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
 	}
 
-	tools, ok := result["tools"]
-	if !ok {
-		t.Fatal("expected tools in result")
-	}
-
-	toolsList, ok := tools.([]Tool)
-	if !ok {
-		t.Fatal("expected tools to be a slice of Tool")
-	}
-
-	if len(toolsList) == 0 {
+	if len(result.Tools) == 0 {
 		t.Error("expected at least one tool")
 	}
 }
@@ -207,14 +194,16 @@ func TestHandleUnknownMethod(t *testing.T) {
 func TestHandleToolsCallWithoutName(t *testing.T) {
 	server := &MCPServer{}
 
+	params, _ := json.Marshal(map[string]string{
+		// Missing "name" parameter
+		"arguments": "{}",
+	})
+
 	req := MCPRequest{
 		Jsonrpc: "2.0",
 		ID:      4,
 		Method:  "tools/call",
-		Params: map[string]interface{}{
-			// Missing "name" parameter
-			"arguments": map[string]interface{}{},
-		},
+		Params:  params,
 	}
 
 	resp := server.HandleRequest(req)
@@ -231,14 +220,16 @@ func TestHandleToolsCallWithoutName(t *testing.T) {
 func TestHandleToolsCallUnknownTool(t *testing.T) {
 	server := &MCPServer{}
 
+	params, _ := json.Marshal(ToolCallParams{
+		Name:      "unknown_tool",
+		Arguments: json.RawMessage(`{}`),
+	})
+
 	req := MCPRequest{
 		Jsonrpc: "2.0",
 		ID:      5,
 		Method:  "tools/call",
-		Params: map[string]interface{}{
-			"name":      "unknown_tool",
-			"arguments": map[string]interface{}{},
-		},
+		Params:  params,
 	}
 
 	resp := server.HandleRequest(req)
@@ -253,14 +244,17 @@ func TestHandleToolsCallUnknownTool(t *testing.T) {
 }
 
 func TestFormatLogsResult(t *testing.T) {
-	input := map[string]interface{}{
-		"logs": []map[string]interface{}{
+	input := &QueryLogsResult{
+		Logs: []LogEntry{
 			{
-				"id":      "test-id",
-				"message": "test message",
+				ID:      "test-id",
+				Message: "test message",
 			},
 		},
-		"count": 1,
+		Count: 1,
+		Query: "test query",
+		From:  "2026-01-20T00:00:00Z",
+		To:    "2026-01-20T01:00:00Z",
 	}
 
 	result := formatLogsResult(input)
@@ -270,7 +264,7 @@ func TestFormatLogsResult(t *testing.T) {
 	}
 
 	// Verify it's valid JSON
-	var parsed map[string]interface{}
+	var parsed QueryLogsResult
 	err := json.Unmarshal([]byte(result), &parsed)
 	if err != nil {
 		t.Errorf("formatted result should be valid JSON: %v", err)
@@ -301,12 +295,12 @@ func TestMCPRequestUnmarshal(t *testing.T) {
 }
 
 func TestMCPResponseMarshal(t *testing.T) {
+	result, _ := json.Marshal(map[string]string{"status": "ok"})
+
 	resp := MCPResponse{
 		Jsonrpc: "2.0",
 		ID:      1,
-		Result: map[string]string{
-			"status": "ok",
-		},
+		Result:  result,
 	}
 
 	data, err := json.Marshal(resp)
